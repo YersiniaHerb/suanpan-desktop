@@ -24,6 +24,8 @@
   var AUTO_MARKET_CLOSED_MS = 10 * 60 * 1000;
   var AUTO_MARKET_SHARD_EVERY = 5;
   var AUTO_MARKET_SHARD_SIZE = 360;
+  var MIN_CHART_KLINES = 20;
+  var DEFAULT_CHART_CODES = ['600519', '000001', '300750', '000333', '002594', '601318', '600036', '601899', '600900', '300059'];
 
   // ---------- 状态 ----------
   var state = {
@@ -42,6 +44,7 @@
     watchGroups: load('costock.watchGroups', defaultWatchGroups), // 分组 -> 代码
 	    watchGroup: '全部',                                       // 当前分组（'全部' 为虚拟分组=全部自选）
 	    watchFilter: '',                                          // 自选搜索关键词
+    marketScope: normalizeMarketScope(load('costock.marketScope', 'hs')),
 	    formulaGroup: '全部',                                     // 公式当前分组
 	    formulaFilter: '',                                        // 公式搜索关键词
 	    activeFormulaKey: 'builtin:0',
@@ -58,6 +61,9 @@
 
   function clone(val) { return val == null ? val : JSON.parse(JSON.stringify(val)); }
   function load(key, def) { try { var v = JSON.parse(localStorage.getItem(key)); return v == null ? clone(def) : v; } catch (e) { return clone(def); } }
+  function normalizeMarketScope(raw) {
+    return raw === 'all' ? 'all' : 'hs';
+  }
   function normalizeMarketSort(raw) {
     var allowed = { changePercent: 1, amount: 1, marketCap: 1, turnoverRate: 1, price: 1, code: 1 };
     var key = raw && allowed[raw.key] ? raw.key : 'changePercent';
@@ -83,6 +89,7 @@
       aiHistory: load('costock.aiHistory', []),
       aiConsensus: load('costock.aiConsensus', null),
       marketSort: normalizeMarketSort(state.marketSort),
+      marketScope: normalizeMarketScope(state.marketScope),
       sideWidths: load('costock.sideWidths', {})
     };
   }
@@ -97,6 +104,7 @@
     if (Array.isArray(s.aiHistory) && s.aiHistory.length) return true;
     if (s.aiConsensus) return true;
     if (s.marketSort && (s.marketSort.key !== 'changePercent' || s.marketSort.dir !== 'desc')) return true;
+    if (s.marketScope && normalizeMarketScope(s.marketScope) !== 'hs') return true;
     if (s.watchGroups && Object.keys(s.watchGroups).some(function (g) { return Array.isArray(s.watchGroups[g]) && s.watchGroups[g].length; })) return true;
     if (s.sideWidths && Object.keys(s.sideWidths).length) return true;
     return false;
@@ -146,6 +154,10 @@
     if (userState.marketSort && typeof userState.marketSort === 'object') {
       state.marketSort = normalizeMarketSort(userState.marketSort);
       try { localStorage.setItem('costock.marketSort', JSON.stringify(state.marketSort)); } catch (e) {}
+    }
+    if (userState.marketScope) {
+      state.marketScope = normalizeMarketScope(userState.marketScope);
+      try { localStorage.setItem('costock.marketScope', JSON.stringify(state.marketScope)); } catch (e) {}
     }
     if (userState.sideWidths && typeof userState.sideWidths === 'object') {
       try { localStorage.setItem('costock.sideWidths', JSON.stringify(userState.sideWidths)); } catch (e) {}
@@ -431,15 +443,36 @@
   }
 
   // ---------- 行情列表 ----------
+  function marketIncludesBeijing() {
+    return normalizeMarketScope(state.marketScope) === 'all';
+  }
+  function isBeijingCode(code) {
+    return /^(43|83|87|92)/.test(String(code || ''));
+  }
+  function marketScopeAllowsCode(code) {
+    return marketIncludesBeijing() || !isBeijingCode(code);
+  }
+  function visibleMarketQuotes() {
+    return D.listStocks().filter(function (q) { return marketScopeAllowsCode(q.code); });
+  }
+  function visibleMarketCodes() {
+    return (D && D.allCodes ? D.allCodes() : []).filter(marketScopeAllowsCode);
+  }
+  function marketScopeText() {
+    return marketIncludesBeijing() ? '沪深北' : '沪深';
+  }
   function renderMarketList() {
     var ul = $('#marketList');
-    var quotes = D.listStocks();
+    var allQuotes = D.listStocks();
+    var baseQuotes = allQuotes.filter(function (q) { return marketScopeAllowsCode(q.code); });
+    var quotes = baseQuotes.slice();
     var kw = (state.marketFilter || '').trim().toLowerCase();
     if (kw) quotes = quotes.filter(function (q) { return q.code.indexOf(kw) >= 0 || q.name.toLowerCase().indexOf(kw) >= 0; });
     quotes = sortMarketQuotes(quotes);
     ul.innerHTML = quotes.map(function (q) { return quoteRow(q, state.currentCode); }).join('');
-    var total = D.listStocks().length;
-    $('#marketCount').textContent = quotes.length + ' / ' + total + ' 只';
+    var total = baseQuotes.length;
+    var hidden = allQuotes.length - baseQuotes.length;
+    $('#marketCount').textContent = quotes.length + ' / ' + total + ' 只 · ' + marketScopeText() + (hidden > 0 && !marketIncludesBeijing() ? ' · 隐藏北交所 ' + hidden : '');
     $all('li', ul).forEach(function (li) {
       li.onclick = function () { showDetail(li.dataset.code); };
     });
@@ -487,6 +520,32 @@
   }
 
   // ---------- 个股详情 ----------
+  function minUsableKLines() {
+    return Math.min(state.bars || 120, MIN_CHART_KLINES);
+  }
+  function klineCountForCode(code) {
+    if (!code || !D || !D.getKLines) return 0;
+    try { return D.getKLines(code).length; } catch (e) { return 0; }
+  }
+  function hasUsableKLines(code) {
+    return klineCountForCode(code) >= minUsableKLines();
+  }
+  function firstUsableMarketCode(codes) {
+    var list = Array.isArray(codes) ? codes : [];
+    for (var i = 0; i < DEFAULT_CHART_CODES.length; i += 1) {
+      if (list.indexOf(DEFAULT_CHART_CODES[i]) >= 0 && hasUsableKLines(DEFAULT_CHART_CODES[i])) return DEFAULT_CHART_CODES[i];
+    }
+    for (var j = 0; j < list.length; j += 1) {
+      if (hasUsableKLines(list[j])) return list[j];
+    }
+    return null;
+  }
+  function selectUsableMarketCode(codes, current) {
+    var list = Array.isArray(codes) ? codes : [];
+    if (!list.length) return null;
+    if (current && list.indexOf(current) >= 0 && hasUsableKLines(current)) return current;
+    return firstUsableMarketCode(list) || (current && list.indexOf(current) >= 0 ? current : list[0]);
+  }
   function showDetail(code) {
     state.currentCode = code;
     $all('#marketList li').forEach(function (li) { li.classList.toggle('active', li.dataset.code === code); });
@@ -655,7 +714,7 @@
       return;
     }
     var klines = D.getKLines(code);
-    var minBars = Math.min(state.bars || 120, 20);
+    var minBars = minUsableKLines();
     var sparse = klines.length < minBars;
     // 多副图越多，主图越矮，保证整体不溢出
     var mainH = state.subIndicators.length >= 2 ? 280 : 320;
@@ -729,8 +788,8 @@
     if (D && D.hydrate) D.hydrate(snapshot);
     marketLoaded = true;
     var status = D.getStatus ? D.getStatus() : null;
-    var codes = D.allCodes();
-    if (!state.currentCode || codes.indexOf(state.currentCode) < 0) state.currentCode = codes[0] || null;
+    var codes = visibleMarketCodes();
+    state.currentCode = selectUsableMarketCode(codes, state.currentCode);
     if (state.watchCurrentCode && codes.indexOf(state.watchCurrentCode) < 0) state.watchCurrentCode = null;
     if (status) {
       setDataBadge(status.connected ? '真实/延迟数据' : '本地/缓存数据', status.connected, status);
@@ -765,7 +824,7 @@
     if (window.costockBridge && window.costockBridge.market && window.costockBridge.market.getSnapshot) {
       window.costockBridge.market.getSnapshot().then(function (snapshot) {
         syncMarketSnapshot(snapshot);
-        refreshLiveMarket(true, { universe: 'a-share', quoteLimit: 1500, klineCodeLimit: 1, aShareFallbackQuoteLimit: 1500, timeoutMs: 8000, kind: 'bootstrap', priority: 70 })
+        refreshLiveMarket(true, { universe: 'a-share', quoteLimit: 1500, klineCodeLimit: DEFAULT_CHART_CODES.length, klineLimit: 250, priorityKlineCodes: DEFAULT_CHART_CODES, includeBeijing: marketIncludesBeijing(), aShareFallbackQuoteLimit: 1500, timeoutMs: 8000, kind: 'bootstrap', priority: 70 })
           .finally(refreshFullMarketInBackground);
       }).catch(function () {
         setDataBadge('本地/缓存数据', false, D.getStatus ? D.getStatus() : null);
@@ -827,10 +886,11 @@
     add(state.currentCode);
     add(state.watchCurrentCode);
     (state.watch || []).forEach(add);
+    DEFAULT_CHART_CODES.forEach(add);
     return out;
   }
   function autoMarketShardCodes(size) {
-    var codes = D && D.allCodes ? D.allCodes() : [];
+    var codes = visibleMarketCodes();
     if (!codes.length || !size) return [];
     var out = [];
     for (var i = 0; i < size && i < codes.length; i += 1) {
@@ -853,8 +913,10 @@
       universe: 'current',
       quoteLimit: fullMarket ? Math.max(80, refreshCodes.length) : Math.max(80, count || 80),
       klineCodeLimit: 1,
+      codes: visibleMarketCodes(),
       priorityQuoteCodes: refreshCodes,
       priorityKlineCodes: priorityCodes,
+      includeBeijing: marketIncludesBeijing(),
       timeoutMs: 5000,
       quiet: true,
       auto: true
@@ -887,11 +949,12 @@
         timeoutMs: 8000,
         quiet: true,
         background: true,
+        includeBeijing: marketIncludesBeijing(),
         kind: 'full-chunk',
         priority: 10,
         aShareStartPage: start,
         aSharePageCount: pagesPerTask,
-        coalesceKey: 'full-chunk:' + start + ':' + pagesPerTask
+        coalesceKey: 'full-chunk:' + (marketIncludesBeijing() ? 'all' : 'hs') + ':' + start + ':' + pagesPerTask
       }));
     }
     fullMarketRefreshPromise = Promise.all(tasks).finally(function () {
@@ -948,10 +1011,10 @@
     var opts = options || {};
     if (opts.coalesceKey) return opts.coalesceKey;
     if (opts.universe === 'a-share' && opts.aShareStartPage) {
-      return 'a-share-page:' + opts.aShareStartPage + ':' + (opts.aSharePageCount || 1);
+      return 'a-share-page:' + (opts.includeBeijing ? 'all' : 'hs') + ':' + opts.aShareStartPage + ':' + (opts.aSharePageCount || 1);
     }
     if (opts.universe === 'a-share') {
-      return 'a-share:' + (opts.quoteLimit || 6000) + ':' + (opts.klineCodeLimit == null ? '' : opts.klineCodeLimit);
+      return 'a-share:' + (opts.includeBeijing ? 'all' : 'hs') + ':' + (opts.quoteLimit || 6000) + ':' + (opts.klineCodeLimit == null ? '' : opts.klineCodeLimit);
     }
     var codes = Array.isArray(opts.priorityQuoteCodes) ? opts.priorityQuoteCodes.slice(0, 80).join(',') : '';
     return (opts.kind || 'current') + ':' + codes + ':' + (opts.quoteLimit || 80);
@@ -1016,14 +1079,14 @@
     var refreshAllBtn = $('#refreshAllMarketBtn');
     if (refreshAllBtn) {
       if (window.costockBridge && window.costockBridge.market && window.costockBridge.market.refreshLive) {
-        refreshAllBtn.onclick = function () { refreshLiveMarket(false, { universe: 'a-share', quoteLimit: 6000, klineCodeLimit: 30 }); };
+        refreshAllBtn.onclick = function () { refreshLiveMarket(false, { universe: 'a-share', quoteLimit: 6000, klineCodeLimit: 30, klineLimit: 250, priorityKlineCodes: DEFAULT_CHART_CODES, includeBeijing: marketIncludesBeijing() }); };
       } else {
         refreshAllBtn.style.display = 'none';
       }
     }
     if (refreshBtn) {
       if (window.costockBridge && window.costockBridge.market && window.costockBridge.market.refreshLive) {
-        refreshBtn.onclick = function () { refreshLiveMarket(false); };
+        refreshBtn.onclick = function () { refreshLiveMarket(false, { codes: visibleMarketCodes(), quoteLimit: Math.max(80, visibleMarketCodes().length || 80), klineCodeLimit: 1, includeBeijing: marketIncludesBeijing() }); };
       } else {
         refreshBtn.style.display = 'none';
       }
@@ -1127,8 +1190,9 @@
     sections.push(statusSection('行情数据', [
       statusRow('连接状态', market.connected ? '真实/延迟数据' : '本地/缓存数据', market.connected ? 'up' : 'down'),
       statusRow('来源', market.provider || market.source || '-'),
-      statusRow('股票数', market.count != null ? market.count + ' 只' : '-'),
-      statusRow('K线数', market.klineCount != null ? market.klineCount + ' 根' : '-'),
+	      statusRow('股票数', market.count != null ? market.count + ' 只' : '-'),
+	      statusRow('显示范围', marketScopeText()),
+	      statusRow('K线数', market.klineCount != null ? market.klineCount + ' 根' : '-'),
       statusRow('分时点', market.intradayCount != null ? market.intradayCount + ' 点' : '-'),
       statusRow('更新时间', fmtStatusTime(market.updatedAt)),
       statusRow('缓存状态', market.path ? '本机缓存可用' : '当前会话'),
@@ -1248,6 +1312,51 @@
         if (e.key === 'Escape') {
           e.preventDefault();
           closeDataStatus();
+        }
+      };
+    }
+  }
+  function closeAppSettings() {
+    var mask = $('#appSettingsMask');
+    if (mask) mask.classList.remove('show');
+  }
+  function openAppSettings() {
+    var mask = $('#appSettingsMask');
+    var includeBJ = $('#settingIncludeBJ');
+    if (!mask || !includeBJ) return;
+    includeBJ.checked = marketIncludesBeijing();
+    mask.classList.add('show');
+    setTimeout(function () { includeBJ.focus(); }, 40);
+  }
+  function applyMarketScopeSettings() {
+    state.marketScope = $('#settingIncludeBJ') && $('#settingIncludeBJ').checked ? 'all' : 'hs';
+    save('costock.marketScope', state.marketScope);
+    var codes = visibleMarketCodes();
+    state.currentCode = selectUsableMarketCode(codes, state.currentCode);
+    if (state.watchCurrentCode && !marketScopeAllowsCode(state.watchCurrentCode)) state.watchCurrentCode = null;
+    renderMarketList();
+    updateFormulaTestStocks();
+    if (state.panel === 'market' && state.currentCode) renderSnapshotDetail('#detailView', state.currentCode);
+    if (state.panel === 'screener') renderScreenResults(state.lastScreenResults || []);
+    toast('行情范围已切换为' + marketScopeText());
+    closeAppSettings();
+  }
+  function setupAppSettingsModal() {
+    var open = $('#appSettingsBtn');
+    var close = $('#appSettingsClose');
+    var cancel = $('#appSettingsCancel');
+    var saveBtn = $('#appSettingsSave');
+    var mask = $('#appSettingsMask');
+    if (open) open.onclick = openAppSettings;
+    if (close) close.onclick = closeAppSettings;
+    if (cancel) cancel.onclick = closeAppSettings;
+    if (saveBtn) saveBtn.onclick = applyMarketScopeSettings;
+    if (mask) {
+      mask.onclick = function (e) { if (e.target === mask) closeAppSettings(); };
+      mask.onkeydown = function (e) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeAppSettings();
         }
       };
     }
@@ -1791,7 +1900,7 @@
 	    var sel = $('#formulaTestStock');
 	    if (!sel) return;
 	    var current = sel.value;
-	    var quotes = D.listStocks();
+	    var quotes = visibleMarketQuotes();
 	    sel.innerHTML = quotes.map(function (q) { return '<option value="' + q.code + '">' + q.name + ' ' + q.code + '</option>'; }).join('');
 	    var preferred = current && D.getStock(current)
 	      ? current
@@ -2084,7 +2193,7 @@
     var mode = criteria.mode;
     var results = [];
     var ind = window.CoStockIndicator;
-    var codes = D.allCodes();
+    var codes = visibleMarketCodes();
     var status = $('#screenStatus');
     var runMeta = clone(criteria);
     if (state.screenStrategyId) runMeta.strategyId = state.screenStrategyId;
@@ -2168,11 +2277,12 @@
   function renderScreenResults(results) {
     state.lastScreenResults = results;
     var ul = $('#screenResults'), empty = $('#screenEmpty');
-    $('#screenResultCount').textContent = '(' + results.length + ')';
+    var scoped = (results || []).filter(function (r) { return r && r.q && marketScopeAllowsCode(r.q.code); });
+    $('#screenResultCount').textContent = '(' + scoped.length + ')';
     // 结果内搜索过滤
     var kw = (state.screenFilter || '').trim().toLowerCase();
-    var shown = kw ? results.filter(function (r) { return r.q.code.indexOf(kw) >= 0 || r.q.name.toLowerCase().indexOf(kw) >= 0; }) : results;
-    if (!results.length) { ul.innerHTML = ''; empty.classList.remove('hidden'); empty.textContent = '无符合条件的股票，试试放宽条件'; return; }
+    var shown = kw ? scoped.filter(function (r) { return r.q.code.indexOf(kw) >= 0 || r.q.name.toLowerCase().indexOf(kw) >= 0; }) : scoped;
+    if (!scoped.length) { ul.innerHTML = ''; empty.classList.remove('hidden'); empty.textContent = '无符合条件的股票，试试放宽条件'; return; }
     if (!shown.length) { ul.innerHTML = ''; empty.classList.remove('hidden'); empty.textContent = '没有匹配「' + kw + '」的结果'; return; }
     empty.classList.add('hidden');
     ul.innerHTML = shown.map(function (r) {
@@ -2985,10 +3095,11 @@
       if (e.key === '5') switchPanel('plans');
     });
     renderMarketList();
-    showDetail(D.allCodes()[0]);
+    showDetail(selectUsableMarketCode(visibleMarketCodes(), state.currentCode));
     setupSearch();
     setupTextPromptModal();
     setupDataStatusModal();
+    setupAppSettingsModal();
     setupSoftwareUpdates();
     setupAiSettingsModal();
     setupFormula();

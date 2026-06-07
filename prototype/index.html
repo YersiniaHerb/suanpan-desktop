@@ -21,6 +21,7 @@
       <button id="refreshAllMarketBtn" class="mini-btn topbar-action" title="加载东方财富全 A 延迟报价">全A</button>
       <button id="refreshMarketBtn" class="mini-btn topbar-action" title="刷新东方财富延迟行情">刷新行情</button>
       <button id="importMarketBtn" class="mini-btn topbar-action" title="导入 JSON/CSV 行情快照或长表 K 线">导入行情</button>
+      <button id="appSettingsBtn" class="mini-btn topbar-action" title="行情设置">设置</button>
       <button id="aiSettingsBtn" class="mini-btn topbar-action" title="AI 设置">AI设置</button>
       <span id="clock" class="clock"></span>
       <span id="dataBadge" class="badge">本地/缓存数据</span>
@@ -252,6 +253,24 @@
       <div class="modal-foot">
         <button class="btn" id="dataStatusRefresh">刷新状态</button>
         <button class="btn btn-primary" id="dataStatusDone">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 应用设置弹窗 -->
+  <div class="modal-mask" id="appSettingsMask">
+    <div class="modal app-settings-modal" role="dialog" aria-modal="true" aria-labelledby="appSettingsTitle">
+      <div class="modal-head">
+        <span id="appSettingsTitle">设置</span>
+        <button class="modal-close" id="appSettingsClose" aria-label="关闭设置">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-tip">默认只显示沪深市场。需要查看北交所时，打开下方选项后再刷新或搜索。</p>
+        <label class="settings-check"><input id="settingIncludeBJ" type="checkbox" /> 包含北交所</label>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="appSettingsCancel">取消</button>
+        <button class="btn btn-primary" id="appSettingsSave">保存</button>
       </div>
     </div>
   </div>

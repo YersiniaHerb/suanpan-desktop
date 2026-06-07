@@ -9,7 +9,8 @@ const TENCENT_INTRADAY_URL = 'https://web.ifzq.gtimg.cn/appstock/app/minute/quer
 const QUOTE_FIELDS = 'f12,f13,f14,f2,f3,f4,f5,f6,f15,f16,f17,f18,f8,f9,f20,f21,f23';
 const KLINE_FIELDS1 = 'f1,f2,f3,f4,f5,f6';
 const KLINE_FIELDS2 = 'f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61';
-const A_SHARE_FS = 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048';
+const A_SHARE_FS_HS = 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23';
+const A_SHARE_FS_ALL = `${A_SHARE_FS_HS},m:0+t:81+s:2048`;
 const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126 Safari/537.36';
 
 function toNumber(value) {
@@ -40,6 +41,7 @@ function secidForCode(code, market) {
   const normalized = normalizeCode(code);
   const m = market || inferMarket(normalized);
   if (m === 'SH') return `1.${normalized}`;
+  if (m === 'BJ') return `2.${normalized}`;
   return `0.${normalized}`;
 }
 
@@ -411,6 +413,7 @@ async function fetchEastmoneyAShareQuotes(options) {
   const opts = options || {};
   const timeoutMs = opts.timeoutMs;
   const limit = opts.limit != null ? opts.limit : (opts.quoteLimit != null ? opts.quoteLimit : 6000);
+  const includeBeijing = opts.includeBeijing === true;
   const pageSize = Math.min(Math.max(1, opts.pageSize || 500), 5000);
   const quotes = [];
   const seen = new Set();
@@ -424,7 +427,7 @@ async function fetchEastmoneyAShareQuotes(options) {
       np: 1,
       fltt: 2,
       invt: 2,
-      fs: A_SHARE_FS,
+      fs: includeBeijing ? A_SHARE_FS_ALL : A_SHARE_FS_HS,
       fields: QUOTE_FIELDS,
     })}`;
     let payload;
@@ -444,7 +447,8 @@ async function fetchEastmoneyAShareQuotes(options) {
     });
     page++;
   }
-  const sliced = quotes.slice(0, limit);
+  const scoped = includeBeijing ? quotes : quotes.filter((quote) => quote.market !== 'BJ');
+  const sliced = scoped.slice(0, limit);
   sliced.provider = 'eastmoney-a-share';
   return sliced;
 }
@@ -453,6 +457,7 @@ async function fetchSinaAShareQuotes(options) {
   const opts = options || {};
   const timeoutMs = opts.timeoutMs;
   const limit = opts.limit != null ? opts.limit : (opts.quoteLimit != null ? opts.quoteLimit : 6000);
+  const includeBeijing = opts.includeBeijing === true;
   const pageSize = Math.min(Math.max(1, opts.pageSize || 100), 100);
   const concurrency = Math.min(Math.max(1, opts.pageConcurrency || opts.concurrency || 6), 12);
   const startPage = Math.max(1, Number(opts.aShareStartPage || opts.startPage || 1) || 1);
@@ -507,7 +512,8 @@ async function fetchSinaAShareQuotes(options) {
     loadedPages += pages.length;
     page += pages.length;
   }
-  const sliced = quotes.slice(0, limit);
+  const scoped = includeBeijing ? quotes : quotes.filter((quote) => quote.market !== 'BJ');
+  const sliced = scoped.slice(0, limit);
   sliced.provider = 'sina-a-share';
   return sliced;
 }

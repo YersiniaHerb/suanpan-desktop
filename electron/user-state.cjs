@@ -46,6 +46,7 @@ function createDefaultState() {
     aiHistory: [],
     aiConsensus: null,
     marketSort: { key: 'changePercent', dir: 'desc' },
+    marketScope: 'hs',
     sideWidths: {},
   };
 }
@@ -64,6 +65,10 @@ function normalizeMarketSort(input) {
   return { key, dir };
 }
 
+function normalizeMarketScope(input) {
+  return input === 'all' ? 'all' : 'hs';
+}
+
 function normalizeState(raw) {
   const next = createDefaultState();
   if (!raw || typeof raw !== 'object') return next;
@@ -77,6 +82,7 @@ function normalizeState(raw) {
   if (Array.isArray(raw.aiHistory)) next.aiHistory = clone(raw.aiHistory);
   if ('aiConsensus' in raw) next.aiConsensus = clone(raw.aiConsensus);
   if (raw.marketSort && typeof raw.marketSort === 'object') next.marketSort = normalizeMarketSort(raw.marketSort);
+  if (raw.marketScope) next.marketScope = normalizeMarketScope(raw.marketScope);
   if (raw.sideWidths && typeof raw.sideWidths === 'object') next.sideWidths = clone(raw.sideWidths);
   next.version = Number(raw.version) || 1;
   return next;
@@ -132,6 +138,7 @@ function createStore(statePath) {
     if (patch && Object.prototype.hasOwnProperty.call(patch, 'aiHistory')) next.aiHistory = patch.aiHistory;
     if (patch && Object.prototype.hasOwnProperty.call(patch, 'aiConsensus')) next.aiConsensus = patch.aiConsensus;
     if (patch && Object.prototype.hasOwnProperty.call(patch, 'marketSort')) next.marketSort = patch.marketSort;
+    if (patch && Object.prototype.hasOwnProperty.call(patch, 'marketScope')) next.marketScope = patch.marketScope;
     if (patch && Object.prototype.hasOwnProperty.call(patch, 'sideWidths')) next.sideWidths = patch.sideWidths;
     state = normalizeState(next);
     persist();
@@ -157,6 +164,7 @@ function createStore(statePath) {
       historyCount: current.aiHistory.length,
       hasConsensus: !!current.aiConsensus,
       marketSort: clone(current.marketSort),
+      marketScope: current.marketScope,
       sideWidthCount: Object.keys(current.sideWidths || {}).length,
       path: statePath,
     };

@@ -572,6 +572,7 @@ canvas { display: block; width: 100%; }
 .status-loading { color: var(--text-dim); padding: 8px 0 14px; }
 .status-link { color: var(--blue); text-decoration: none; font-weight: 500; }
 .status-link:hover { text-decoration: underline; }
+.app-settings-modal,
 .ai-settings-modal { width: 520px; max-width: 94vw; }
 .settings-label {
   display: block;

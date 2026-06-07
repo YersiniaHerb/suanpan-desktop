@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, safeStorage, screen, shell } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -140,14 +140,32 @@ function windowSizeFromEnv(name, fallback, min) {
   return Math.max(min, Math.round(value));
 }
 
-function createWindow() {
-  const minWidth = 1280;
-  const minHeight = 840;
-  const win = new BrowserWindow({
-    width: windowSizeFromEnv('COSTOCK_WINDOW_WIDTH', 1600, minWidth),
-    height: windowSizeFromEnv('COSTOCK_WINDOW_HEIGHT', 960, minHeight),
+function createWindowBounds() {
+  const display = screen.getPrimaryDisplay();
+  const workArea = display.workArea;
+  const minWidth = Math.min(1280, workArea.width);
+  const minHeight = Math.min(840, workArea.height);
+  const width = Math.min(windowSizeFromEnv('COSTOCK_WINDOW_WIDTH', 1600, minWidth), workArea.width);
+  const height = Math.min(windowSizeFromEnv('COSTOCK_WINDOW_HEIGHT', 960, minHeight), workArea.height);
+  return {
+    x: workArea.x + Math.max(0, Math.floor((workArea.width - width) / 2)),
+    y: workArea.y + Math.max(0, Math.floor((workArea.height - height) / 2)),
+    width,
+    height,
     minWidth,
     minHeight,
+  };
+}
+
+function createWindow() {
+  const bounds = createWindowBounds();
+  const win = new BrowserWindow({
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    minWidth: bounds.minWidth,
+    minHeight: bounds.minHeight,
     backgroundColor: '#f5f5f7',
     title: '算盘',
     titleBarStyle: 'hiddenInset',
@@ -197,6 +215,7 @@ ipcMain.handle('costock:market:refreshLive', async (_event, options) => {
   const klineCodeLimit = Number(process.env.COSTOCK_LIVE_KLINE_CODES || (options && options.klineCodeLimit) || (universe === 'a-share' ? 1 : 30));
   const klineLimit = Number(process.env.COSTOCK_LIVE_KLINE_BARS || (options && options.klineLimit) || 250);
   const timeoutMs = Number(process.env.COSTOCK_LIVE_TIMEOUT_MS || (options && options.timeoutMs) || 8000);
+  const includeBeijing = !!(options && options.includeBeijing);
   const snapshot = await createEastmoneySnapshot({
     baseSnapshot: current,
     codes,
@@ -210,6 +229,7 @@ ipcMain.handle('costock:market:refreshLive', async (_event, options) => {
     aShareFallbackQuoteLimit: options && options.aShareFallbackQuoteLimit,
     aShareStartPage: options && options.aShareStartPage,
     aSharePageCount: options && options.aSharePageCount,
+    includeBeijing,
     timeoutMs,
   });
   const status = ensureMarketStore().hydrate(snapshot);

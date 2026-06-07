@@ -79,6 +79,36 @@ function copyRuntimeApp(resourcesApp) {
   });
 }
 
+function walkFiles(dir, visitor) {
+  if (!fs.existsSync(dir)) return;
+  fs.readdirSync(dir, { withFileTypes: true }).forEach((entry) => {
+    const item = path.join(dir, entry.name);
+    visitor(item, entry);
+    if (entry.isDirectory()) walkFiles(item, visitor);
+  });
+}
+
+function frameworkRelativeTarget(target) {
+  if (!path.isAbsolute(target)) return '';
+  const marker = `${path.sep}Contents${path.sep}Frameworks${path.sep}`;
+  const index = target.indexOf(marker);
+  return index === -1 ? '' : target.slice(index + marker.length);
+}
+
+function normalizeCopiedFrameworkSymlinks(appPath) {
+  const frameworks = path.join(appPath, 'Contents', 'Frameworks');
+  walkFiles(frameworks, (item, entry) => {
+    if (!entry.isSymbolicLink()) return;
+    const currentTarget = fs.readlinkSync(item);
+    const relToFrameworks = frameworkRelativeTarget(currentTarget);
+    if (!relToFrameworks) return;
+    const nextTargetAbs = path.join(frameworks, relToFrameworks);
+    const nextTarget = path.relative(path.dirname(item), nextTargetAbs);
+    fs.unlinkSync(item);
+    fs.symlinkSync(nextTarget, item);
+  });
+}
+
 function setPlistString(plist, key, value) {
   const replace = spawnSync('plutil', ['-replace', key, '-string', value, plist], { encoding: 'utf8' });
   if (replace.status === 0) return;
@@ -149,6 +179,7 @@ function main() {
   fs.rmSync(MAC_DIR, { recursive: true, force: true });
   fs.mkdirSync(MAC_DIR, { recursive: true });
   fs.cpSync(electronApp, appPath, { recursive: true });
+  normalizeCopiedFrameworkSymlinks(appPath);
   copyRuntimeApp(resourcesApp);
 
   const icon = generateIcns();
