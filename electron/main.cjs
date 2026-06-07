@@ -9,6 +9,7 @@ const { createAiAppServer } = require('./ai-app-server.cjs');
 const { createAiSettingsStore } = require('./ai-settings.cjs');
 const { createCodexExecEnv, resolveCodexBin } = require('./codex-cli.cjs');
 const { AI_READABLE_TOOLS, buildCodexExecArgs, enrichAiPayload: enrichAiPayloadWithData } = require('./ai-payload.cjs');
+const { createUpdateService } = require('./update-service.cjs');
 
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disable-gpu');
@@ -18,6 +19,7 @@ let marketStore = null;
 let userStateStore = null;
 let aiAppServer = null;
 let aiSettingsStore = null;
+let updateService = null;
 let latestRendererAiContext = null;
 
 function getMarketStatePath() {
@@ -113,6 +115,25 @@ function ensureAiSettingsStore() {
   return aiSettingsStore;
 }
 
+function ensureUpdateService() {
+  if (!updateService) {
+    updateService = createUpdateService({
+      currentVersion: app.getVersion(),
+      repository: process.env.SUANPAN_UPDATE_REPOSITORY || 'YersiniaHerb/suanpan-desktop',
+      timeoutMs: Number(process.env.SUANPAN_UPDATE_TIMEOUT_MS || 8000),
+      startupDelayMs: Number(process.env.SUANPAN_UPDATE_STARTUP_DELAY_MS || 6000),
+      intervalMs: Number(process.env.SUANPAN_UPDATE_INTERVAL_MS || 6 * 60 * 60 * 1000),
+    });
+  }
+  return updateService;
+}
+
+function broadcastUpdateStatus(status) {
+  BrowserWindow.getAllWindows().forEach((win) => {
+    if (!win.isDestroyed()) win.webContents.send('costock:update:status', status);
+  });
+}
+
 function windowSizeFromEnv(name, fallback, min) {
   const value = Number(process.env[name]);
   if (!Number.isFinite(value) || value <= 0) return fallback;
@@ -142,6 +163,10 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
+  });
+
+  win.webContents.on('did-finish-load', () => {
+    win.webContents.send('costock:update:status', ensureUpdateService().getStatus());
   });
 
   win.loadFile(path.join(__dirname, '..', 'prototype', 'index.html'));
@@ -364,6 +389,16 @@ ipcMain.handle('costock:ai-settings:save', async (_event, patch) => {
   return ensureAiSettingsStore().save(patch);
 });
 
+ipcMain.handle('costock:update:getStatus', async () => {
+  return ensureUpdateService().getStatus();
+});
+
+ipcMain.handle('costock:update:check', async () => {
+  const status = await ensureUpdateService().check('renderer');
+  broadcastUpdateStatus(status);
+  return status;
+});
+
 function enrichAiPayload(payload) {
   return enrichAiPayloadWithData(payload, {
     getMarketStore: ensureMarketStore,
@@ -465,6 +500,7 @@ app.whenReady().then(() => {
   ensureAiAppServer().start().catch((err) => {
     console.error('Suanpan AI app-server failed to start:', err && err.message ? err.message : err);
   });
+  ensureUpdateService().start(broadcastUpdateStatus);
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

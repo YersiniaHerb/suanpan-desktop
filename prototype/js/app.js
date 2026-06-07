@@ -16,6 +16,8 @@
   var lastMarketSyncAt = 0;
   var autoMarketShardCursor = 0;
   var autoMarketRefreshTick = 0;
+  var softwareUpdateStatus = null;
+  var softwareUpdateNotifiedVersion = '';
   var defaultWatchGroups = { '长线': [], '短线': [], '观察': [] };
   var AUTO_MARKET_ACTIVE_MS = 3 * 1000;
   var AUTO_MARKET_NEAR_SESSION_MS = 60 * 1000;
@@ -1045,11 +1047,25 @@
   function statusRow(label, value, extraClass) {
     return '<span class="status-k">' + esc(label) + '</span><span class="status-v ' + (extraClass || '') + '">' + esc(value) + '</span>';
   }
+  function statusRowHtml(label, valueHtml, extraClass) {
+    return '<span class="status-k">' + esc(label) + '</span><span class="status-v ' + (extraClass || '') + '">' + valueHtml + '</span>';
+  }
   function statusSection(title, rows) {
     return '<div class="status-section"><h4>' + esc(title) + '</h4><div class="status-grid">' + rows.join('') + '</div></div>';
   }
   function fmtStatusTime(ts) {
     return ts ? fmtTime(ts) : '-';
+  }
+  function updateBridge() {
+    return window.costockBridge && window.costockBridge.update ? window.costockBridge.update : null;
+  }
+  function softwareUpdateLabel(update) {
+    if (!update) return '等待自动检测';
+    if (update.checking) return '检测中';
+    if (update.updateAvailable) return '发现新版本';
+    if (update.ok) return '已是最新';
+    if (update.ok === false) return '检测失败';
+    return update.message || '等待自动检测';
   }
 	  function storageStatusLabel(ok) {
 	    return ok ? '本机已写入' : '尚未写入';
@@ -1106,6 +1122,7 @@
     var aiBackend = ai.backend || {};
     var aiSettings = ai.settings || {};
     var runtime = status.runtime || {};
+    var software = status.software || softwareUpdateStatus || {};
     var sections = [];
     sections.push(statusSection('行情数据', [
       statusRow('连接状态', market.connected ? '真实/延迟数据' : '本地/缓存数据', market.connected ? 'up' : 'down'),
@@ -1126,6 +1143,17 @@
       statusRow('选股历史', runtime.screenHistoryCount != null ? runtime.screenHistoryCount + ' 次' : '-'),
       statusRow('研究计划', runtime.tradePlanCount != null ? runtime.tradePlanCount + ' 条' : '-')
     ]));
+    var updateRows = [
+      statusRow('当前版本', software.currentVersion || '-'),
+      statusRow('更新检测', softwareUpdateLabel(software), software.updateAvailable ? 'up' : (software.ok === false ? 'down' : '')),
+      statusRow('最新版本', software.latestVersion || '-'),
+      statusRow('检测时间', fmtStatusTime(software.checkedAt)),
+      statusRow('发布包', software.assetName || '-')
+    ];
+    if (software.releaseUrl && software.updateAvailable) {
+      updateRows.push(statusRowHtml('发布页', '<a class="status-link" href="' + esc(software.releaseUrl) + '" target="_blank" rel="noreferrer">打开发布页</a>', 'up'));
+    }
+    sections.push(statusSection('软件版本', updateRows));
 	    sections.push(statusSection('AI 聊天', [
 	      statusRow('运行方式', 'Codex'),
 	      statusRow('连接状态', aiBackend.enabled ? '已就绪' : '未就绪', aiBackend.enabled ? 'up' : 'down'),
@@ -1146,6 +1174,7 @@
     var marketBridge = window.costockBridge && window.costockBridge.market;
     var appServerBridge = window.costockBridge && window.costockBridge.aiAppServer;
     var aiBridge = window.costockBridge && window.costockBridge.ai;
+    var update = updateBridge();
     var user = userBridge();
     var localUser = localUserStateSnapshot();
     var runtime = {
@@ -1167,12 +1196,16 @@
     var aiPromise = aiBridge && aiBridge.getStatus
       ? aiBridge.getStatus().catch(function () { return { backend: { source: 'codex-unavailable' }, readableTools: [], tradingDisabled: true }; })
       : Promise.resolve({ backend: { source: 'codex-unavailable' }, readableTools: [], tradingDisabled: true });
-    return Promise.all([marketPromise, userPromise, appPromise, aiPromise]).then(function (items) {
+    var updatePromise = update && update.getStatus
+      ? update.getStatus().catch(function () { return softwareUpdateStatus || null; })
+      : Promise.resolve(softwareUpdateStatus || null);
+    return Promise.all([marketPromise, userPromise, appPromise, aiPromise, updatePromise]).then(function (items) {
       return {
         market: items[0],
         user: items[1],
         appServer: items[2],
         ai: items[3],
+        software: items[4],
         runtime: runtime,
         userState: localUser
       };
@@ -1217,6 +1250,22 @@
           closeDataStatus();
         }
       };
+    }
+  }
+  function applySoftwareUpdateStatus(status) {
+    if (!status) return;
+    softwareUpdateStatus = status;
+    if (status.updateAvailable && status.latestVersion && softwareUpdateNotifiedVersion !== status.latestVersion) {
+      softwareUpdateNotifiedVersion = status.latestVersion;
+      toast('发现新版本 ' + status.latestVersion);
+    }
+  }
+  function setupSoftwareUpdates() {
+    var bridge = updateBridge();
+    if (!bridge) return;
+    if (bridge.onStatus) bridge.onStatus(applySoftwareUpdateStatus);
+    if (bridge.getStatus) {
+      bridge.getStatus().then(applySoftwareUpdateStatus).catch(function () {});
     }
   }
   function aiSettingsBridge() {
@@ -2940,6 +2989,7 @@
     setupSearch();
     setupTextPromptModal();
     setupDataStatusModal();
+    setupSoftwareUpdates();
     setupAiSettingsModal();
     setupFormula();
     setupScreener();

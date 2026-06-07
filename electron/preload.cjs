@@ -14,6 +14,16 @@ contextBridge.exposeInMainWorld('costockBridge', {
   aiAppServer: {
     getInfo: () => ipcRenderer.invoke('costock:ai-app-server:getInfo'),
   },
+  update: {
+    getStatus: () => ipcRenderer.invoke('costock:update:getStatus'),
+    check: () => ipcRenderer.invoke('costock:update:check'),
+    onStatus: (handler) => {
+      if (typeof handler !== 'function') return () => {};
+      const listener = (_event, status) => handler(status);
+      ipcRenderer.on('costock:update:status', listener);
+      return () => ipcRenderer.removeListener('costock:update:status', listener);
+    },
+  },
   market: {
     getSnapshot: () => ipcRenderer.invoke('costock:market:getSnapshot'),
     hydrateSnapshot: (snapshot) => ipcRenderer.invoke('costock:market:hydrateSnapshot', snapshot),

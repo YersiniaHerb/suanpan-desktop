@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Electron runtime
+        run: npm install --no-audit --no-fund --no-save electron@29.2.0
+      - name: Run checks
+        run: npm run check
+      - name: Package macOS app
+        run: npm run package:mac
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" dist/suanpan-desktop-*.zip dist/latest-mac.json --clobber
+          else
+            gh release create "$TAG_NAME" dist/suanpan-desktop-*.zip dist/latest-mac.json \
+              --title "算盘 ${TAG_NAME}" \
+              --notes "macOS 桌面端发布包。应用会通过 GitHub Releases 自动检测后续版本。"
+          fi

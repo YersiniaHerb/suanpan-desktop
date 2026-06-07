@@ -833,6 +833,7 @@ async function main() {
       const restoredCrosshairShown = !!(v && h && v.classList.contains('show') && h.classList.contains('show'));
       const safeRect = safe.getBoundingClientRect();
       const brandRect = brand.getBoundingClientRect();
+      const logoImg = document.querySelector('.brand .logo img');
       const topbarRect = topbar.getBoundingClientRect();
       const topbarRightRect = document.querySelector('.topbar-right').getBoundingClientRect();
       const workspaceRect = document.querySelector('.workspace').getBoundingClientRect();
@@ -975,6 +976,8 @@ async function main() {
         url: location.href,
         tabs: Array.from(document.querySelectorAll('.tab')).map((x) => x.textContent.trim()),
         hasAiSettingsButton: !!document.querySelector('#aiSettingsBtn'),
+        hasUpdateBridge: !!(window.costockBridge && window.costockBridge.update && window.costockBridge.update.getStatus && window.costockBridge.update.onStatus),
+        logoLoaded: !!(logoImg && logoImg.complete && logoImg.naturalWidth > 0 && logoImg.naturalHeight > 0),
         cardButtons: Array.from(document.querySelectorAll('.stock-card button')).map((x) => x.textContent.trim()),
         aiRuntime: document.querySelector('#aiRuntime').innerText,
         dataBadge: dataBadge ? dataBadge.textContent.trim() : '',
@@ -1064,6 +1067,8 @@ async function main() {
     assert.strictEqual(result.hasSyntheticOrderbook, false);
     assert.strictEqual(result.hasQuoteStatsCard, true);
     assert.strictEqual(result.hasAiSettingsButton, true);
+    assert.strictEqual(result.hasUpdateBridge, true);
+    assert.strictEqual(result.logoLoaded, true);
     assert.ok(result.aiRuntime.includes('Codex'), result.aiRuntime);
     assert.ok(result.aiRuntime.includes('已接入当前数据'), result.aiRuntime);
     assert.strictEqual(/本地AI回复|Codex数据入口|Codex数据已注入/.test(result.aiRuntime), false, result.aiRuntime);
@@ -1201,6 +1206,9 @@ async function main() {
     assert.ok(modalText.includes('公式'), modalText);
     assert.ok(modalText.includes('API Key'), modalText);
     assert.ok(modalText.includes('Base URL'), modalText);
+    assert.ok(modalText.includes('软件版本'), modalText);
+    assert.ok(modalText.includes('当前版本'), modalText);
+    assert.ok(modalText.includes('更新检测'), modalText);
     assert.strictEqual(/本地AI回复|Codex数据入口|Codex数据已注入/.test(modalText), false, modalText);
     assert.strictEqual(/127\.0\.0\.1|https?:\/\/|入口地址/.test(modalText), false, modalText);
     assert.strictEqual(/缓存文件|用户文件|\/Users\/|\/var\/|user-state\.json|market-snapshot\.json|codex-data|latest-context\.json|[A-Za-z]:\\/.test(modalText), false, modalText);

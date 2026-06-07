@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Electron runtime
+        run: npm install --no-audit --no-fund --no-save electron@29.2.0
+      - name: Run checks
+        run: npm run check
+      - name: Runtime doctor
+        run: npm run doctor:runtime
+

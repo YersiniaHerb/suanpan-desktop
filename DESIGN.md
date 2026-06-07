@@ -3,13 +3,13 @@
 ## Source of Truth
 - Status: Active
 - Last refreshed: 2026-06-03
-- Primary product surfaces: macOS Electron desktop app, market view, watchlist, formula editor, screener, research plans, shared AI dock, data/AI status modal.
-- Evidence reviewed: `SPEC.md`, `prototype/index.html`, `prototype/css/styles.css`, `prototype/js/app.js`, `prototype/js/chart.js`, `electron/main.cjs`, `electron/ai-app-server.cjs`, `electron/ai-settings.cjs`, `scripts/smoke-electron-runtime.cjs`, `scripts/smoke-electron-persistence.cjs`, `scripts/doctor-runtime.cjs`.
+- Primary product surfaces: macOS Electron desktop app, market view, watchlist, formula editor, screener, research plans, shared AI dock, data/AI/version status modal.
+- Evidence reviewed: `SPEC.md`, `README.md`, `prototype/index.html`, `prototype/css/styles.css`, `prototype/js/app.js`, `prototype/js/chart.js`, `electron/main.cjs`, `electron/ai-app-server.cjs`, `electron/ai-settings.cjs`, `electron/update-service.cjs`, `assets/suanpan-logo.svg`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `scripts/package-macos.cjs`, `scripts/smoke-electron-runtime.cjs`, `scripts/smoke-electron-persistence.cjs`, `scripts/doctor-runtime.cjs`.
 - Prototype source: the repository-local `prototype/` implementation is the canonical product/visual prototype for the desktop app.
 - Current implementation note: the repository is a plain Electron/static HTML/CSS/JS app. `SPEC.md` now reflects the current MVP boundary; do not migrate stack or add new product surfaces unless explicitly requested.
 
 ## Brand
-- Personality: quiet, dense, professional A-share research terminal.
+- Personality: quiet, dense, professional A-share research terminal. The logo is a compact abacus mark, not a marketing illustration.
 - Trust signals: explicit data source/state, local user-state persistence, Codex availability, AI-readable data status, no hidden trading capability.
 - Avoid: marketing hero layouts, decorative gradients/orbs, simulated-trading surfaces, unclear terms such as "App Server" or "local fallback" in visible UI.
 
@@ -29,7 +29,7 @@
 - Content hierarchy: market data and selected-stock chart dominate; sidebars are scan/navigation surfaces; AI dock is secondary and shared.
 
 ## Design Principles
-- Principle 1: data provenance is visible. Use "真实/延迟数据", "本地/缓存数据", "Codex可用/不可用", "已接入当前数据", and "已接入应用数据" terminology.
+- Principle 1: data provenance is visible. Use "真实/延迟数据", "本地/缓存数据", "Codex已就绪/未就绪", "已接入当前数据", and "已接入应用数据" terminology.
 - Principle 2: research-only boundaries stay visible. Plans are observation/review artifacts, not orders.
 - Principle 3: Codex data access is described as read-only current application data; do not expose auth tokens, internal server jargon, local addresses, sandbox details, or trading endpoint capability in user-facing status UI.
 - Tradeoffs: prefer compact operational density over decorative whitespace; keep controls familiar and deterministic.
@@ -40,12 +40,12 @@
 - Spacing/layout rhythm: compact rows, stable sidebars, fixed top/bottom bars, no nested page-section cards.
 - Shape/radius/elevation: small radius for controls and repeated cards; modals may use existing elevated style.
 - Motion: minimal hover/focus feedback; no decorative animation except small status/typing states.
-- Imagery/iconography: no stock imagery; use concise symbols/icons already present in the app.
+- Imagery/iconography: no stock imagery; use the repository SVG abacus mark and concise symbols/icons already present in the app.
 
 ## Components
-- Existing components to reuse: topbar status controls, sidebars, quote rows, chart toolbar, stock card, modal, toast, AI runtime chips, bottom tab bar.
-- New/changed components: application-owned prompt/confirm modal for names and destructive confirmations; use it instead of native `prompt()`/`confirm()`.
-- Variants and states: loading/refreshing, connected/cache data, active tab/list row, empty list, modal open/closed, Codex available/unavailable, AI data connected/not connected.
+- Existing components to reuse: topbar status controls, sidebars, quote rows, chart toolbar, stock card, modal, toast, AI runtime chips, bottom tab bar, data/Codex/version status modal.
+- New/changed components: application-owned prompt/confirm modal for names and destructive confirmations; use it instead of native `prompt()`/`confirm()`. Software update detection status belongs in the existing status modal and toast path, not a new topbar button.
+- Variants and states: loading/refreshing, connected/cache data, active tab/list row, empty list, modal open/closed, Codex ready/not ready, AI data connected/not connected, update waiting/checking/latest/available/failed.
 - Token/component ownership: CSS variables in `prototype/css/styles.css`; JS-rendered components in `prototype/js/app.js`.
 
 ## Accessibility
@@ -70,15 +70,15 @@
 
 ## Content Voice
 - Tone: direct, compact, research-terminal wording.
-- Terminology: prefer "Codex可用", "Codex不可用", "已接入当前数据", "已接入应用数据", "真实/延迟数据", "本地/缓存数据".
-- Microcopy rules: avoid "App Server", "本地后备", and claims of real-time/trading-grade data unless explicitly proven.
+- Terminology: prefer "Codex已就绪", "Codex未就绪", "已接入当前数据", "已接入应用数据", "真实/延迟数据", "本地/缓存数据".
+- Microcopy rules: avoid "App Server", "本地后备", and claims of real-time/trading-grade data unless explicitly proven. Update copy should say automatic detection and release page; do not imply automatic install.
 - Research-plan copy: use observation/review language such as "研究计划", "观察复盘", and "失效线"; avoid operation-oriented suggestions such as "轻仓", "分批操作", or visible trading-interface labels.
 
 ## Implementation Constraints
 - Framework/styling system: plain Electron main/preload plus static HTML/CSS/JS.
 - Design-token constraints: use existing CSS variables and component classes before adding new styles.
 - Performance constraints: market and chart views should remain responsive with loaded all-A quotes; startup should load all-A delayed quotes without blocking interaction, and fetch single-stock daily K data on demand instead of preloading every K-line series. Codex prompt should use compact embedded summary plus local full snapshot file; API Key and Base URL settings must not enter the snapshot.
-- Compatibility constraints: current machine has global Electron, not project-local dependencies; no new dependencies without explicit request.
+- Compatibility constraints: current machine has global Electron, not project-local dependencies; release packaging reuses Electron.app without adding npm package dependencies. No new dependencies without explicit request.
 - Test/screenshot expectations: run `npm run check`, `npm run doctor:runtime`, and `npm run test:electron-smoke` for meaningful UI/runtime changes. Run `npm run test:electron-persistence` when user-state, AI consensus, or Codex data-injection persistence changes.
 
 ## Open Questions

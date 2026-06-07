@@ -76,8 +76,10 @@ body.platform-darwin .traffic-safe-zone {
 .topbar-right {
   -webkit-app-region: no-drag;
 }
-.brand { font-size: 15px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px; white-space: nowrap; min-width: 132px; overflow: hidden; flex: 1 1 auto; }
-.logo { color: var(--accent); }
+.brand { font-size: 15px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 7px; white-space: nowrap; min-width: 132px; overflow: hidden; flex: 1 1 auto; }
+.logo { width: 20px; height: 20px; flex: 0 0 20px; display: inline-flex; align-items: center; justify-content: center; }
+.logo img { width: 20px; height: 20px; display: block; }
+.brand-name { flex: 0 0 auto; }
 .brand-sub { font-size: 11px; color: var(--muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; min-width: 0; flex: 0 0 auto; justify-content: flex-end; }
 .topbar-action { background: var(--bg); white-space: nowrap; flex: 0 0 auto; }
@@ -568,6 +570,8 @@ canvas { display: block; width: 100%; }
 .status-endpoints div { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 8px; }
 .status-endpoints b { color: var(--text-dim); font-weight: 500; }
 .status-loading { color: var(--text-dim); padding: 8px 0 14px; }
+.status-link { color: var(--blue); text-decoration: none; font-weight: 500; }
+.status-link:hover { text-decoration: underline; }
 .ai-settings-modal { width: 520px; max-width: 94vw; }
 .settings-label {
   display: block;
