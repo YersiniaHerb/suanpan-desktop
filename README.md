@@ -4,6 +4,12 @@
 
 算盘是一个 macOS Electron 桌面端 A 股研究终端。当前产品边界是研究和观察：行情、自选股、公式、选股、研究计划，以及只读 Codex 辅助分析；不包含账户、下单、撤单、自动交易或模拟盘。
 
+## 下载
+
+macOS 试用包在 [GitHub Releases](https://github.com/YersiniaHerb/suanpan-desktop/releases) 下载。`main-latest` 是 main 分支最新自动构建；正式版本以 `v*` 版本号发布为准。
+
+当前安装包未做 Apple 签名和公证，首次打开时 macOS 可能提示无法验证开发者。
+
 ## 当前能力
 
 - 行情：启动后自动加载全 A 真实/延迟报价，失败时保留本地/缓存数据。
@@ -85,20 +91,6 @@ npm run package:mac
 - `dist/latest-mac.json`
 
 打包脚本复用本机 Electron.app，把仓库运行文件写入 `Contents/Resources/app`，并写入 bundle 名称、版本和应用标识。没有代码签名和 notarization；公开分发前需要另行接入 Apple 开发者证书。
-
-## CI/CD 发布
-
-仓库包含两个 GitHub Actions workflow：
-
-- `.github/workflows/ci.yml`：push / pull request 时安装 Electron runtime，运行 `npm run check` 和 `npm run doctor:runtime`。
-- `.github/workflows/release.yml`：推送 `v*` tag 时运行检查、打包 macOS zip，并把 zip 与 `latest-mac.json` 上传到 GitHub Release。
-
-发布命令示例：
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
 
 ## 自动检测更新
 

@@ -2,11 +2,16 @@ name: Release
 
 on:
   push:
+    branches: [main]
     tags:
       - 'v*'
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   macos:
@@ -22,15 +27,39 @@ jobs:
         run: npm run check
       - name: Package macOS app
         run: npm run package:mac
+      - name: Resolve release target
+        id: release
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "branch" ] && [ "${GITHUB_REF_NAME}" = "main" ]; then
+            echo "tag=main-latest" >> "$GITHUB_OUTPUT"
+            echo "title=算盘 main 自动构建" >> "$GITHUB_OUTPUT"
+            echo "prerelease=--prerelease" >> "$GITHUB_OUTPUT"
+            echo "notes=main 分支最新自动构建。适合下载试用；正式版本以 v* tag Release 为准。" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "title=算盘 ${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=" >> "$GITHUB_OUTPUT"
+            echo "notes=macOS 桌面端发布包。应用会通过 GitHub Releases 自动检测后续版本。" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Move main release tag
+        if: github.ref_type == 'branch' && github.ref_name == 'main'
+        run: |
+          git tag -f main-latest "$GITHUB_SHA"
+          git push origin refs/tags/main-latest --force
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ steps.release.outputs.tag }}
+          RELEASE_TITLE: ${{ steps.release.outputs.title }}
+          RELEASE_NOTES: ${{ steps.release.outputs.notes }}
+          PRERELEASE_FLAG: ${{ steps.release.outputs.prerelease }}
         run: |
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
             gh release upload "$TAG_NAME" dist/suanpan-desktop-*.zip dist/latest-mac.json --clobber
+            gh release edit "$TAG_NAME" --title "$RELEASE_TITLE" --notes "$RELEASE_NOTES" $PRERELEASE_FLAG
           else
             gh release create "$TAG_NAME" dist/suanpan-desktop-*.zip dist/latest-mac.json \
-              --title "算盘 ${TAG_NAME}" \
-              --notes "macOS 桌面端发布包。应用会通过 GitHub Releases 自动检测后续版本。"
+              --title "$RELEASE_TITLE" \
+              --notes "$RELEASE_NOTES" \
+              $PRERELEASE_FLAG
           fi
