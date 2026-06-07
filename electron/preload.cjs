@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('costockBridge', {
     importFile: () => ipcRenderer.invoke('costock:market:importFile'),
     refreshLive: (options) => ipcRenderer.invoke('costock:market:refreshLive', options || {}),
     refreshKLine: (options) => ipcRenderer.invoke('costock:market:refreshKLine', options || {}),
+    refreshKLines: (options) => ipcRenderer.invoke('costock:market:refreshKLines', options || {}),
     refreshIntraday: (options) => ipcRenderer.invoke('costock:market:refreshIntraday', options || {}),
     getStatus: () => ipcRenderer.invoke('costock:market:getStatus'),
   },

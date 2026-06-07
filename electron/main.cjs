@@ -260,6 +260,51 @@ ipcMain.handle('costock:market:refreshKLine', async (_event, options) => {
   return { status, snapshot: ensureMarketStore().getSnapshot(), code, klineCount: klines.length };
 });
 
+ipcMain.handle('costock:market:refreshKLines', async (_event, options) => {
+  const opts = options || {};
+  const requestedCodes = Array.isArray(opts.codes) ? opts.codes.map(normalizeCode).filter(Boolean) : [];
+  if (!requestedCodes.length) throw new Error('股票代码无效');
+  const limit = Number(opts.limit || process.env.COSTOCK_LIVE_KLINE_BARS || 250);
+  const minCount = Number(opts.minCount || 120);
+  const concurrency = Math.max(1, Math.min(Number(opts.concurrency || 8), 20));
+  const current = ensureMarketStore().getSnapshot();
+  const byCode = new Map(current.stocks.map((stock) => [stock.code, stock]));
+  const codes = Array.from(new Set(requestedCodes)).filter((code) => byCode.has(code));
+  const updated = new Map();
+  const failed = [];
+  let next = 0;
+
+  async function worker() {
+    while (next < codes.length) {
+      const code = codes[next++];
+      const stock = byCode.get(code);
+      try {
+        const klines = await fetchKLines(code, { limit, timeoutMs: 12000, market: stock.market });
+        if (Array.isArray(klines) && klines.length >= minCount) updated.set(code, klines);
+        else failed.push(code);
+      } catch (err) {
+        failed.push(code);
+      }
+    }
+  }
+
+  await Promise.all(new Array(Math.min(concurrency, codes.length)).fill(0).map(worker));
+  const nextSnapshot = {
+    ...current,
+    source: 'network',
+    provider: current.provider && !/tencent-kline/.test(current.provider)
+      ? `${current.provider}+tencent-kline`
+      : (current.provider || 'network+tencent-kline'),
+    connected: current.connected !== false,
+    updatedAt: Date.now(),
+    note: `${current.note || '外部延迟行情'}；批量日K已更新 ${updated.size}/${codes.length} 只`,
+    stocks: current.stocks.map((item) => updated.has(item.code) ? { ...item, klines: updated.get(item.code) } : item),
+  };
+  const status = ensureMarketStore().hydrate(nextSnapshot);
+  persistMarketSnapshot(ensureMarketStore().getSnapshot());
+  return { status, snapshot: ensureMarketStore().getSnapshot(), requested: codes.length, updated: updated.size, failed };
+});
+
 ipcMain.handle('costock:market:refreshIntraday', async (_event, options) => {
   const code = normalizeCode(options && options.code);
   if (!code) throw new Error('股票代码无效');

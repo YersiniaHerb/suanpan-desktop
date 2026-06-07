@@ -25,6 +25,8 @@
   var AUTO_MARKET_SHARD_EVERY = 5;
   var AUTO_MARKET_SHARD_SIZE = 360;
   var MIN_CHART_KLINES = 20;
+  var SCREEN_MIN_KLINES = 120;
+  var SCREEN_KLINE_BATCH_SIZE = 96;
   var DEFAULT_CHART_CODES = ['600519', '000001', '300750', '000333', '002594', '601318', '600036', '601899', '600900', '300059'];
 
   // ---------- 状态 ----------
@@ -2186,7 +2188,60 @@
     // 默认勾选涨幅+金叉
     $('[data-cond="macdGold"]').checked = true;
     $('[data-body="macdGold"]').classList.toggle('disabled', false);
-    renderScreenStrategies();
+	    renderScreenStrategies();
+	  }
+  function screenNeedsKLines(criteria) {
+    var c = criteria || {};
+    if (c.mode === 'formula') return true;
+    var conds = c.conditions || {};
+    return !!(conds.maUp != null || conds.maDown != null || conds.volR != null || conds.macdGold || conds.macdDead || conds.kdjGold || conds.kdjDead || conds.newHigh != null || conds.newLow != null);
+  }
+  function missingScreenKLineCodes(codes) {
+    return (codes || []).filter(function (code) {
+      return klineCountForCode(code) < SCREEN_MIN_KLINES;
+    });
+  }
+  function ensureScreenKLineCoverage(codes, criteria, status) {
+    if (!screenNeedsKLines(criteria)) return Promise.resolve({ prepared: false, missing: 0 });
+    var bridge = window.costockBridge && window.costockBridge.market;
+    var missing = missingScreenKLineCodes(codes);
+    if (!missing.length) return Promise.resolve({ prepared: false, missing: 0 });
+    if (!bridge || !bridge.refreshKLines) {
+      if (status) {
+        status.className = 'down';
+        status.textContent = '日K不足：当前仅 ' + (codes.length - missing.length) + ' / ' + codes.length + ' 只可完整扫描';
+      }
+      return Promise.resolve({ prepared: false, missing: missing.length });
+    }
+    var total = missing.length;
+    var done = 0;
+    var updated = 0;
+    function runBatch(start) {
+      var batch = missing.slice(start, start + SCREEN_KLINE_BATCH_SIZE);
+      if (!batch.length) return Promise.resolve();
+      if (status) {
+        status.className = 'muted';
+        status.textContent = '准备日K ' + done + ' / ' + total + '，完成后自动选股';
+      }
+      return bridge.refreshKLines({
+        codes: batch,
+        limit: 250,
+        minCount: SCREEN_MIN_KLINES,
+        concurrency: 12
+      }).then(function (res) {
+        done += batch.length;
+        updated += res && res.updated ? res.updated : 0;
+        if (res && res.snapshot) syncMarketSnapshot(res.snapshot, { deferRender: true });
+        return runBatch(start + SCREEN_KLINE_BATCH_SIZE);
+      });
+    }
+    return runBatch(0).then(function () {
+      if (status) {
+        status.className = 'muted';
+        status.textContent = '日K准备完成：更新 ' + updated + ' / ' + total + ' 只';
+      }
+      return { prepared: true, missing: total, updated: updated };
+    });
   }
   function runScreen() {
     var criteria = currentScreenCriteria();
@@ -2195,8 +2250,29 @@
     var ind = window.CoStockIndicator;
     var codes = visibleMarketCodes();
     var status = $('#screenStatus');
+    var runBtn = $('#runScreenBtn');
     var runMeta = clone(criteria);
     if (state.screenStrategyId) runMeta.strategyId = state.screenStrategyId;
+    if (runBtn && runBtn.disabled) return;
+    if (runBtn) runBtn.disabled = true;
+    if (status) {
+      status.className = 'muted';
+      status.textContent = '检查日K数据…';
+    }
+
+    ensureScreenKLineCoverage(codes, criteria, status).then(function () {
+      scanScreen(criteria, codes, runMeta, mode, results, ind, status);
+    }).catch(function (err) {
+      if (status) {
+        status.className = 'down';
+        status.textContent = '准备日K失败：' + ((err && err.message) || '未知错误');
+      }
+    }).finally(function () {
+      if (runBtn) runBtn.disabled = false;
+    });
+  }
+
+  function scanScreen(criteria, codes, runMeta, mode, results, ind, status) {
 
     if (mode === 'formula') {
       var src = criteria.formula;
