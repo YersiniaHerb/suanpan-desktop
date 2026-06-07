@@ -6,7 +6,7 @@
 
 ## 下载
 
-macOS 试用包在 [GitHub Releases](https://github.com/YersiniaHerb/suanpan-desktop/releases) 下载。`main-latest` 是 main 分支最新自动构建；正式版本以 `v*` 版本号发布为准。
+macOS 安装包在 [GitHub Releases](https://github.com/YersiniaHerb/suanpan-desktop/releases) 下载。发布包只随 `v*` 版本号 tag 生成。
 
 当前安装包未做 Apple 签名和公证，首次打开时 macOS 可能提示无法验证开发者。
 
