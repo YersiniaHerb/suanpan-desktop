@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:*; font-src 'self' data:;" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>算盘 · A股研究终端</title>
+  <script src="js/platform.js"></script>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- 顶部标题栏 -->
+  <header class="topbar">
+    <div class="traffic-safe-zone" aria-hidden="true"></div>
+    <div class="brand">
+      <span class="logo">▦</span> 算盘
+      <span class="brand-sub">A股研究终端 · 桌面端</span>
+    </div>
+    <div class="topbar-right">
+      <button id="refreshAllMarketBtn" class="mini-btn topbar-action" title="加载东方财富全 A 延迟报价">全A</button>
+      <button id="refreshMarketBtn" class="mini-btn topbar-action" title="刷新东方财富延迟行情">刷新行情</button>
+      <button id="importMarketBtn" class="mini-btn topbar-action" title="导入 JSON/CSV 行情快照或长表 K 线">导入行情</button>
+      <button id="aiSettingsBtn" class="mini-btn topbar-action" title="AI 设置">AI设置</button>
+      <span id="clock" class="clock"></span>
+      <span id="dataBadge" class="badge">本地/缓存数据</span>
+      <span id="dataMeta" class="data-meta"></span>
+    </div>
+  </header>
+
+  <!-- 主体 -->
+  <div class="workspace">
+  <main class="layout">
+    <!-- 行情板块 -->
+    <section class="panel" data-panel="market">
+      <aside class="sidebar">
+        <div class="sidebar-head">
+          <span>全市场 <span class="muted" id="marketCount"></span></span>
+        </div>
+        <div class="watch-search">
+          <input id="marketSearch" type="text" placeholder="搜索代码/名称（如 600519 / 茅台）" autocomplete="off" />
+        </div>
+        <div class="market-tools">
+          <select id="marketSort" title="排序字段">
+            <option value="changePercent">涨跌幅</option>
+            <option value="amount">成交额</option>
+            <option value="marketCap">总市值</option>
+            <option value="turnoverRate">换手率</option>
+            <option value="price">最新价</option>
+            <option value="code">代码</option>
+          </select>
+          <button id="marketSortDir" class="mini-btn" title="切换排序方向">↓</button>
+        </div>
+        <div class="table-head quote-row">
+          <span class="col-name">名称</span>
+          <span class="col-price">最新</span>
+          <span class="col-chg">涨跌幅</span>
+        </div>
+        <ul id="marketList" class="stock-list"></ul>
+      </aside>
+      <div class="content" id="detailView">
+        <!-- 个股详情由 JS 渲染 -->
+      </div>
+    </section>
+
+    <!-- 自选板块 -->
+    <section class="panel hidden" data-panel="watch">
+      <aside class="sidebar">
+        <div class="sidebar-head">
+          <span>自选股 <span class="muted" id="watchCount"></span></span>
+        </div>
+        <div class="watch-groups" id="watchGroups"></div>
+        <div class="watch-search">
+          <input id="watchSearch" type="text" placeholder="搜索自选（代码/名称）" autocomplete="off" />
+          <button class="mini-btn" id="watchImport" title="批量导入">导入</button>
+          <button class="mini-btn" id="watchAddGroup" title="新建分组">＋组</button>
+        </div>
+        <div class="table-head quote-row">
+          <span class="col-name">名称</span>
+          <span class="col-price">最新</span>
+          <span class="col-chg">涨跌幅</span>
+        </div>
+        <ul id="watchList" class="stock-list"></ul>
+        <div id="watchEmpty" class="empty-tip">暂无自选股<br/><span class="muted">在行情或选股结果中点击 ☆ 添加</span></div>
+      </aside>
+      <div class="content" id="watchDetailView"></div>
+    </section>
+
+    <!-- 公式板块 -->
+    <section class="panel hidden" data-panel="formula">
+      <aside class="sidebar formula-side">
+        <div class="sidebar-head"><span>公式库 <span class="muted" id="formulaCount"></span></span></div>
+        <div class="watch-groups" id="formulaGroups"></div>
+        <div class="watch-search">
+          <input id="formulaSearch" type="text" placeholder="搜索公式（名称/说明）" autocomplete="off" />
+          <button class="mini-btn" id="formulaImport" title="批量导入公式">导入</button>
+          <button class="mini-btn" id="formulaNewBtn" title="新建公式">＋式</button>
+        </div>
+        <ul id="formulaTemplates" class="template-list"></ul>
+        <div class="sidebar-head"><span>函数 / 字段</span></div>
+        <div class="func-help">
+          <p><b>字段</b>：O H L C V AMOUNT</p>
+          <p><b>函数</b>：MA EMA REF CROSS HHV LLV COUNT SUM MAX MIN ABS IF SMA STD</p>
+          <p><b>运算</b>：+ - * / &gt; &gt;= &lt; &lt;= = != AND OR NOT</p>
+          <p><b>赋值</b>：MA5 := MA(C,5);</p>
+          <p><b>输出</b>：XG: CROSS(MA5,MA(C,20));</p>
+        </div>
+      </aside>
+      <div class="content formula-content">
+        <div class="formula-editor-head">
+          <span class="formula-editor-title">公式编辑器 <span id="formulaActiveMeta"></span></span>
+          <div>
+            <button id="formulaSaveBtn" class="btn">保存</button>
+            <button id="formulaDeleteBtn" class="btn">删除</button>
+            <button id="formulaCheckBtn" class="btn">校验</button>
+            <button id="formulaRunBtn" class="btn btn-primary">运行测试</button>
+          </div>
+        </div>
+        <textarea id="formulaEditor" class="formula-editor" spellcheck="false"></textarea>
+        <div class="formula-test-bar">
+          <label>测试标的：</label>
+          <select id="formulaTestStock"></select>
+          <span id="formulaStatus" class="formula-status"></span>
+        </div>
+        <div id="formulaResult" class="formula-result"></div>
+      </div>
+    </section>
+
+    <!-- 选股板块 -->
+    <section class="panel hidden" data-panel="screener">
+      <aside class="sidebar screener-side">
+        <div class="sidebar-head"><span>选股条件</span></div>
+        <div class="strategy-tools">
+          <select id="screenStrategySelect" title="选股策略"></select>
+          <button id="screenStrategySave" class="mini-btn" title="保存当前策略">保存</button>
+          <button id="screenStrategyDelete" class="mini-btn" title="删除当前策略">删除</button>
+        </div>
+        <div class="screener-mode">
+          <label><input type="radio" name="screenMode" value="builtin" checked /> 内置条件</label>
+          <label><input type="radio" name="screenMode" value="formula" /> 公式选股</label>
+        </div>
+        <div id="builtinConditions" class="conditions"></div>
+        <div id="formulaCondition" class="conditions hidden">
+          <textarea id="screenFormula" class="formula-editor small" spellcheck="false">XG: CROSS(MA(C,5), MA(C,20)) AND V &gt; MA(V,5)*1.5;</textarea>
+        </div>
+        <button id="runScreenBtn" class="btn btn-primary btn-block">开始选股</button>
+      </aside>
+      <div class="content screener-content">
+        <div class="screener-result-head">
+          <span>选股结果 <span id="screenResultCount" class="muted"></span></span>
+          <span style="display:flex;align-items:center;gap:10px">
+            <input id="screenSearch" class="screen-search" type="text" placeholder="过滤结果…" autocomplete="off" />
+            <span id="screenStatus" class="muted"></span>
+          </span>
+        </div>
+        <div class="table-head result-row">
+          <span class="col-star"></span>
+          <span class="col-code">代码</span>
+          <span class="col-sname">名称</span>
+          <span class="col-rprice">最新</span>
+          <span class="col-rchg">涨跌幅</span>
+          <span class="col-reason">命中原因</span>
+          <span class="col-act"></span>
+        </div>
+        <ul id="screenResults" class="result-list"></ul>
+        <div id="screenEmpty" class="empty-tip">设置条件后点击「开始选股」</div>
+      </div>
+    </section>
+
+    <!-- 研究计划板块 -->
+    <section class="panel hidden" data-panel="plans">
+      <aside class="sidebar plan-side">
+        <div class="sidebar-head">
+          <span>研究计划 <span class="muted" id="planCount"></span></span>
+        </div>
+        <div class="watch-search">
+          <input id="planSearch" type="text" placeholder="搜索计划（代码/名称/来源）" autocomplete="off" />
+          <button class="mini-btn" id="planNewCurrent" title="从当前个股生成计划">当前</button>
+        </div>
+        <ul id="planList" class="stock-list plan-list"></ul>
+        <div id="planEmpty" class="empty-tip">暂无研究计划<br/><span class="muted">在个股详情或选股结果中生成</span></div>
+      </aside>
+      <div class="content" id="planDetailView"></div>
+    </section>
+
+  </main>
+
+    <!-- 全局 AI 智库侧栏（所有板块共享，可收起） -->
+    <aside class="ai-dock" id="aiDock">
+      <div class="ai-head">
+        <span class="ai-title">AI 智库</span>
+        <button class="ai-collapse" id="aiCollapse" title="收起">✕</button>
+      </div>
+      <div class="ai-context" id="aiContext"></div>
+      <div class="ai-runtime" id="aiRuntime"></div>
+      <div class="ai-stream" id="aiStream">
+        <div class="ai-empty">在任意板块向 AI 提问<br/><span class="muted">分析个股 · 解读选股 · 辅助公式</span></div>
+      </div>
+      <div class="ai-actions">
+        <div class="ai-input-row">
+          <button class="ai-quick" id="aiAnalyzeBtn" title="快速分析">✦</button>
+          <input id="aiAsk" type="text" placeholder="发消息…" />
+          <button class="ai-send" id="aiAskBtn" title="发送">↑</button>
+        </div>
+      </div>
+    </aside>
+    <!-- 收起后的浮动唤起按钮 -->
+    <button class="ai-fab" id="aiFab" title="展开 AI 智库" aria-label="展开 AI 智库">AI</button>
+  </div>
+
+  <!-- 底部功能 Tab -->
+  <nav class="tabbar">
+    <button class="tab active" data-tab="market">① 行情</button>
+    <button class="tab" data-tab="watch">② 自选</button>
+    <button class="tab" data-tab="formula">③ 公式</button>
+    <button class="tab" data-tab="screener">④ 选股</button>
+    <button class="tab" data-tab="plans">⑤ 计划</button>
+    <span class="tabbar-hint">通达信式交互 · 数字键 1-5 切换板块</span>
+  </nav>
+
+  <div id="toast" class="toast"></div>
+
+  <!-- 应用内命名输入弹窗 -->
+  <div class="modal-mask" id="promptMask">
+    <div class="modal prompt-modal" role="dialog" aria-modal="true" aria-labelledby="promptTitle">
+      <div class="modal-head">
+        <span id="promptTitle">输入名称</span>
+        <button class="modal-close" id="promptClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-tip hidden" id="promptMessage"></p>
+        <label class="prompt-label" id="promptLabel" for="promptInput">名称</label>
+        <input id="promptInput" class="prompt-input" type="text" autocomplete="off" />
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="promptCancel">取消</button>
+        <button class="btn btn-primary" id="promptOk">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 数据 / Codex 状态弹窗 -->
+  <div class="modal-mask" id="dataStatusMask">
+    <div class="modal data-status-modal" role="dialog" aria-modal="true" aria-labelledby="dataStatusTitle">
+      <div class="modal-head">
+        <span id="dataStatusTitle">数据 / Codex 状态</span>
+        <button class="modal-close" id="dataStatusClose" aria-label="关闭数据状态">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="dataStatusBody" class="status-body"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="dataStatusRefresh">刷新状态</button>
+        <button class="btn btn-primary" id="dataStatusDone">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI 设置弹窗 -->
+  <div class="modal-mask" id="aiSettingsMask">
+    <div class="modal ai-settings-modal" role="dialog" aria-modal="true" aria-labelledby="aiSettingsTitle">
+      <div class="modal-head">
+        <span id="aiSettingsTitle">AI 设置</span>
+        <button class="modal-close" id="aiSettingsClose" aria-label="关闭 AI 设置">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-tip">用于 Codex 回复。API Key 只保存在本机设置里，不写入行情、自选、公式或 Codex 数据快照。</p>
+        <label class="settings-label" for="aiApiKeyInput">API Key</label>
+        <input id="aiApiKeyInput" class="settings-input" type="password" autocomplete="off" placeholder="输入 API Key" />
+        <label class="settings-check"><input id="aiApiKeyClear" type="checkbox" /> 清除已保存的 API Key</label>
+        <label class="settings-label" for="aiBaseUrlInput">Base URL</label>
+        <input id="aiBaseUrlInput" class="settings-input" type="text" autocomplete="off" placeholder="https://api.openai.com/v1" />
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="aiSettingsCancel">取消</button>
+        <button class="btn btn-primary" id="aiSettingsSave">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 批量导入自选弹窗 -->
+  <div class="modal-mask" id="importMask">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+      <div class="modal-head">
+        <span id="importTitle">批量导入自选股</span>
+        <button class="modal-close" id="importClose" aria-label="关闭导入自选">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-tip">兼容通达信自选导出 <b>.blk</b>（如 <span class="muted">1600519 / 0000858</span>，首位为市场标识），也支持纯代码、名称、<span class="muted">600519.SH</span> 等写法；逗号/空格/换行分隔。</p>
+        <div class="import-row" style="margin-top:0;margin-bottom:8px">
+          <label class="import-file-btn">选择 .blk/.txt 文件<input id="importFile" type="file" accept=".blk,.txt,.csv" hidden /></label>
+          <span class="muted" id="importFileName"></span>
+        </div>
+        <textarea id="importText" class="import-text" spellcheck="false" placeholder="1600519&#10;0000858&#10;600276&#10;比亚迪"></textarea>
+        <div class="import-row">
+          <label>导入到分组：</label>
+          <select id="importGroup"></select>
+        </div>
+        <div id="importPreview" class="import-preview"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="importParse">解析预览</button>
+        <button class="btn btn-primary" id="importConfirm">确认导入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 批量导入公式弹窗 -->
+  <div class="modal-mask" id="fImportMask">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="fImportTitle">
+      <div class="modal-head">
+        <span id="fImportTitle">批量导入公式</span>
+        <button class="modal-close" id="fImportClose" aria-label="关闭导入公式">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-tip">每条公式以 <b>名称: 公式体</b> 一行，或用 <b>===名称===</b> 分隔多行公式。如：<br/><span class="muted">均线金叉: XG: CROSS(MA(C,5),MA(C,20));</span></p>
+        <textarea id="fImportText" class="import-text" spellcheck="false" placeholder="均线金叉: XG: CROSS(MA(C,5),MA(C,20));&#10;放量突破: XG: C>=HHV(C,20) AND V>MA(V,5)*1.5;"></textarea>
+        <div class="import-row">
+          <label>导入到分组：</label>
+          <select id="fImportGroup"></select>
+        </div>
+        <div id="fImportPreview" class="import-preview"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="fImportParse">解析预览</button>
+        <button class="btn btn-primary" id="fImportConfirm">确认导入</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/market-source.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/indicators.js"></script>
+  <script src="js/formula.js"></script>
+  <script src="js/chart.js"></script>
+  <script src="js/market-scheduler.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

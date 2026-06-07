@@ -1,0 +1,19 @@
+{
+  "name": "suanpan-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test:market-file": "node scripts/test-market-file.cjs",
+    "test:market-eastmoney": "node scripts/test-market-eastmoney.cjs",
+    "test:market-scheduler": "node scripts/test-market-scheduler.cjs",
+    "test:ai-app-server": "node scripts/test-ai-app-server.cjs",
+    "test:analysis-service": "node scripts/test-analysis-service.cjs",
+    "test:user-state": "node scripts/test-user-state.cjs",
+    "test:electron-smoke": "node scripts/smoke-electron-runtime.cjs",
+    "test:electron-persistence": "node scripts/smoke-electron-persistence.cjs",
+    "doctor:runtime": "node scripts/doctor-runtime.cjs",
+    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/market-file.cjs && node --check electron/market-eastmoney.cjs && node --check electron/analysis-service.cjs && node --check electron/ai-app-server.cjs && node --check electron/ai-context.cjs && node --check electron/ai-payload.cjs && node --check electron/ai-settings.cjs && node --check electron/codex-cli.cjs && node --check electron/user-state.cjs && node --check prototype/js/platform.js && node --check prototype/js/market-source.js && node --check prototype/js/data.js && node --check prototype/js/indicators.js && node --check prototype/js/formula.js && node --check prototype/js/chart.js && node --check prototype/js/market-scheduler.js && node --check prototype/js/app.js && node --check scripts/smoke-electron-runtime.cjs && node --check scripts/smoke-electron-persistence.cjs && node --check scripts/test-ai-context.cjs && node --check scripts/test-ai-payload.cjs && node --check scripts/test-ai-settings.cjs && node --check scripts/test-codex-cli.cjs && node --check scripts/test-market-scheduler.cjs && node scripts/test-market-file.cjs && node scripts/test-market-eastmoney.cjs && node scripts/test-market-scheduler.cjs && node scripts/test-analysis-service.cjs && node scripts/test-ai-app-server.cjs && node scripts/test-ai-context.cjs && node scripts/test-ai-payload.cjs && node scripts/test-ai-settings.cjs && node scripts/test-codex-cli.cjs && node scripts/test-user-state.cjs"
+  }
+}
