@@ -24,6 +24,8 @@ jobs:
         run: npm install --no-audit --no-fund --no-save electron@29.2.0
       - name: Run checks
         run: npm run check
+      - name: Check release version
+        run: npm run check:release-version
       - name: Package macOS app
         run: npm run package:mac
       - name: Create GitHub release
